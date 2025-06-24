@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { supabase } from "@/utils/supabase";
+import Select from "react-select";
 
 export default function EditPostPage() {
 	const router = useRouter();
@@ -17,6 +18,12 @@ export default function EditPostPage() {
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState("");
 	const [showPreview, setShowPreview] = useState(false);
+	const [categories, setCategories] = useState<{ id: string; name: string }[]>(
+		[]
+	);
+	const [tags, setTags] = useState<{ id: string; name: string }[]>([]);
+	const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+	const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
 	useEffect(() => {
 		const fetchPost = async () => {
@@ -42,6 +49,34 @@ export default function EditPostPage() {
 		if (postId) fetchPost();
 	}, [postId]);
 
+	useEffect(() => {
+		if (!postId) return;
+		// Fetch kategori/tag
+		supabase
+			.from("categories")
+			.select("*")
+			.then(({ data }) => setCategories(data || []));
+		supabase
+			.from("tags")
+			.select("*")
+			.then(({ data }) => setTags(data || []));
+		// Fetch relasi post
+		supabase
+			.from("post_categories")
+			.select("category_id")
+			.eq("post_id", postId)
+			.then(({ data }) =>
+				setSelectedCategories(data ? data.map((d) => d.category_id) : [])
+			);
+		supabase
+			.from("post_tags")
+			.select("tag_id")
+			.eq("post_id", postId)
+			.then(({ data }) =>
+				setSelectedTags(data ? data.map((d) => d.tag_id) : [])
+			);
+	}, [postId]);
+
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		setError("");
@@ -59,6 +94,21 @@ export default function EditPostPage() {
 			setError(error.message);
 		} else {
 			setSuccess("Post updated successfully!");
+			await supabase.from("post_categories").delete().eq("post_id", postId);
+			if (selectedCategories.length > 0) {
+				await supabase.from("post_categories").insert(
+					selectedCategories.map((category_id) => ({
+						post_id: postId,
+						category_id,
+					}))
+				);
+			}
+			await supabase.from("post_tags").delete().eq("post_id", postId);
+			if (selectedTags.length > 0) {
+				await supabase
+					.from("post_tags")
+					.insert(selectedTags.map((tag_id) => ({ post_id: postId, tag_id })));
+			}
 			setTimeout(() => {
 				router.push("/admin");
 			}, 1200);
@@ -140,6 +190,37 @@ export default function EditPostPage() {
 						disabled={saving}
 					/>
 					<label htmlFor="published">Published</label>
+				</div>
+				<div>
+					<label className="block text-sm font-medium mb-1">Categories</label>
+					<Select
+						isMulti
+						options={categories.map((cat) => ({
+							value: cat.id,
+							label: cat.name,
+						}))}
+						value={categories
+							.filter((cat) => selectedCategories.includes(cat.id))
+							.map((cat) => ({ value: cat.id, label: cat.name }))}
+						onChange={(opts) =>
+							setSelectedCategories(opts.map((opt) => opt.value))
+						}
+						placeholder="Pilih kategori"
+						classNamePrefix="react-select"
+					/>
+				</div>
+				<div>
+					<label className="block text-sm font-medium mb-1">Tags</label>
+					<Select
+						isMulti
+						options={tags.map((tag) => ({ value: tag.id, label: tag.name }))}
+						value={tags
+							.filter((tag) => selectedTags.includes(tag.id))
+							.map((tag) => ({ value: tag.id, label: tag.name }))}
+						onChange={(opts) => setSelectedTags(opts.map((opt) => opt.value))}
+						placeholder="Pilih tag"
+						classNamePrefix="react-select"
+					/>
 				</div>
 				<div className="flex gap-2">
 					<button

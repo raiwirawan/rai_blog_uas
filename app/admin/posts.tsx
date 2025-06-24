@@ -16,6 +16,9 @@ import {
 	Copy,
 	UserCheck,
 } from "lucide-react";
+import { Category, Tag, Post, UserProfile } from "@/types/supabase";
+import * as RadixSelect from "@radix-ui/react-select";
+import { ChevronDown, Check } from "lucide-react";
 
 interface BlogPost {
 	id: string;
@@ -31,10 +34,92 @@ interface BlogPost {
 		email: string;
 		role?: string;
 	};
+	categories?: Category[];
+	tags?: Tag[];
 }
 
 interface AdminPostsProps {
 	isSuperAdmin?: boolean;
+}
+
+// Komponen Select reusable berbasis Radix UI
+function Select({
+	value,
+	onValueChange,
+	options,
+	placeholder,
+	multiple = false,
+	className = "",
+}: {
+	value: string | string[];
+	onValueChange: (val: string | string[]) => void;
+	options: { value: string; label: string }[];
+	placeholder?: string;
+	multiple?: boolean;
+	className?: string;
+}) {
+	// Untuk multiple, gunakan native <select multiple> (Radix belum support multi)
+	if (multiple) {
+		return (
+			<select
+				multiple
+				value={value as string[]}
+				onChange={(e) =>
+					onValueChange(
+						Array.from(e.target.selectedOptions, (opt) => opt.value)
+					)
+				}
+				className={
+					"px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[120px] bg-white " +
+					className
+				}
+			>
+				<option value="">{placeholder}</option>
+				{options.map((opt) => (
+					<option key={opt.value} value={opt.value}>
+						{opt.label}
+					</option>
+				))}
+			</select>
+		);
+	}
+	// Single select Radix
+	return (
+		<RadixSelect.Root
+			value={value as string}
+			onValueChange={onValueChange as (val: string) => void}
+		>
+			<RadixSelect.Trigger
+				className={
+					"inline-flex items-center justify-between px-3 py-2 border border-gray-300 rounded-md bg-white min-w-[120px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm " +
+					className
+				}
+			>
+				<RadixSelect.Value placeholder={placeholder} />
+				<RadixSelect.Icon>
+					<ChevronDown className="ml-2 h-4 w-4 text-gray-500" />
+				</RadixSelect.Icon>
+			</RadixSelect.Trigger>
+			<RadixSelect.Portal>
+				<RadixSelect.Content className="z-50 bg-white border border-gray-200 rounded-md shadow-lg">
+					<RadixSelect.Viewport className="p-1">
+						{options.map((opt) => (
+							<RadixSelect.Item
+								key={opt.value}
+								value={opt.value}
+								className="flex items-center px-3 py-2 rounded cursor-pointer hover:bg-blue-50 text-sm"
+							>
+								<RadixSelect.ItemText>{opt.label}</RadixSelect.ItemText>
+								<RadixSelect.ItemIndicator className="ml-auto">
+									<Check className="h-4 w-4 text-blue-600" />
+								</RadixSelect.ItemIndicator>
+							</RadixSelect.Item>
+						))}
+					</RadixSelect.Viewport>
+				</RadixSelect.Content>
+			</RadixSelect.Portal>
+		</RadixSelect.Root>
+	);
 }
 
 const AdminPosts: React.FC<AdminPostsProps> = ({ isSuperAdmin }) => {
@@ -51,6 +136,21 @@ const AdminPosts: React.FC<AdminPostsProps> = ({ isSuperAdmin }) => {
 	const [actionLoading, setActionLoading] = useState<string>(""); // post id
 	const [previewPost, setPreviewPost] = useState<BlogPost | null>(null);
 	const [copiedId, setCopiedId] = useState<string>("");
+	const [categories, setCategories] = useState<Category[]>([]);
+	const [tags, setTags] = useState<Tag[]>([]);
+	const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
+	const [tagFilter, setTagFilter] = useState<string[]>([]);
+
+	useEffect(() => {
+		supabase
+			.from("categories")
+			.select("*")
+			.then(({ data }) => setCategories(data || []));
+		supabase
+			.from("tags")
+			.select("*")
+			.then(({ data }) => setTags(data || []));
+	}, [supabase]);
 
 	useEffect(() => {
 		const fetchPosts = async () => {
@@ -58,19 +158,79 @@ const AdminPosts: React.FC<AdminPostsProps> = ({ isSuperAdmin }) => {
 			setError(null);
 			setSuccess("");
 			try {
+				let postIdsByCategory: string[] | null = null;
+				let postIdsByTag: string[] | null = null;
+				if (categoryFilter.length > 0) {
+					const { data } = await supabase
+						.from("post_categories")
+						.select("post_id")
+						.in("category_id", categoryFilter);
+					postIdsByCategory = data?.map((d) => d.post_id) || [];
+				}
+				if (tagFilter.length > 0) {
+					const { data } = await supabase
+						.from("post_tags")
+						.select("post_id")
+						.in("tag_id", tagFilter);
+					postIdsByTag = data?.map((d) => d.post_id) || [];
+				}
 				let query = supabase
 					.from("posts")
-					.select(`*, author:users(username, display_name, email, role)`)
+					.select(
+						`*, author:users(username, display_name, email, role), post_categories(category_id), post_tags(tag_id)`
+					)
 					.order("created_at", { ascending: false });
 				if (statusFilter !== "all") {
 					query = query.eq("status", statusFilter);
+				}
+				if (postIdsByCategory) {
+					query = query.in(
+						"id",
+						postIdsByCategory.length > 0 ? postIdsByCategory : ["-"]
+					);
+				}
+				if (postIdsByTag) {
+					query = query.in(
+						"id",
+						postIdsByTag.length > 0 ? postIdsByTag : ["-"]
+					);
 				}
 				const { data, error } = await query;
 				if (error) {
 					setError(error.message);
 					setPosts([]);
 				} else {
-					setPosts(data || []);
+					const categoryMap = Object.fromEntries(
+						categories.map((c) => [c.id, c])
+					);
+					const tagMap = Object.fromEntries(tags.map((t) => [t.id, t]));
+					const mapped = (data || []).map(
+						(
+							post: Post & {
+								post_categories?: { category_id: string }[];
+								post_tags?: { tag_id: string }[];
+								author?: UserProfile;
+							}
+						) => ({
+							...post,
+							content: post.content ?? "",
+							author: post.author
+								? {
+										...post.author,
+										display_name: post.author.display_name ?? "",
+								  }
+								: undefined,
+							categories: post.post_categories
+								? post.post_categories
+										.map((pc) => categoryMap[pc.category_id])
+										.filter(Boolean)
+								: [],
+							tags: post.post_tags
+								? post.post_tags.map((pt) => tagMap[pt.tag_id]).filter(Boolean)
+								: [],
+						})
+					);
+					setPosts(mapped);
 				}
 			} catch {
 				setError("Failed to load posts.");
@@ -80,7 +240,8 @@ const AdminPosts: React.FC<AdminPostsProps> = ({ isSuperAdmin }) => {
 			}
 		};
 		fetchPosts();
-	}, [supabase, statusFilter]);
+		// Tambahkan dependensi categories dan tags agar mapping selalu up-to-date
+	}, [supabase, statusFilter, categoryFilter, tagFilter, categories, tags]);
 
 	const handleDelete = async (post: BlogPost) => {
 		if (
@@ -231,38 +392,67 @@ const AdminPosts: React.FC<AdminPostsProps> = ({ isSuperAdmin }) => {
 
 			<div className="flex flex-col sm:flex-row gap-4">
 				<div className="relative flex-1">
-					<Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
 					<input
 						type="text"
 						placeholder="Search posts by title or author..."
 						value={searchTerm}
 						onChange={(e) => setSearchTerm(e.target.value)}
-						className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+						className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+						style={{ paddingLeft: 36 }}
 					/>
+					<Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
 				</div>
 				<div className="flex items-center space-x-2">
 					<Filter className="h-4 w-4 text-gray-500" />
-					<select
+					<Select
 						value={statusFilter}
-						onChange={(e) =>
-							setStatusFilter(e.target.value as "all" | "draft" | "published")
-						}
-						className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-					>
-						<option value="all">All Status</option>
-						<option value="published">Published</option>
-						<option value="draft">Draft</option>
-					</select>
-					<select
+						onValueChange={(val) => {
+							if (typeof val === "string")
+								setStatusFilter(val as "all" | "draft" | "published");
+						}}
+						options={[
+							{ value: "all", label: "All Status" },
+							{ value: "published", label: "Published" },
+							{ value: "draft", label: "Draft" },
+						]}
+						placeholder="Status"
+						className="min-w-[110px]"
+					/>
+					<Select
 						value={authorRoleFilter}
-						onChange={(e) => setAuthorRoleFilter(e.target.value)}
-						className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-					>
-						<option value="all">All Roles</option>
-						<option value="user">User</option>
-						<option value="admin">Admin</option>
-						<option value="superadmin">Superadmin</option>
-					</select>
+						onValueChange={(val) => {
+							if (typeof val === "string") setAuthorRoleFilter(val);
+						}}
+						options={[
+							{ value: "all", label: "All Roles" },
+							{ value: "user", label: "User" },
+							{ value: "admin", label: "Admin" },
+							{ value: "superadmin", label: "Superadmin" },
+						]}
+						placeholder="Role"
+						className="min-w-[110px]"
+					/>
+					<Select
+						value={categoryFilter[0] || ""}
+						onValueChange={(val) => {
+							if (typeof val === "string") setCategoryFilter(val ? [val] : []);
+						}}
+						options={categories.map((cat) => ({
+							value: cat.id,
+							label: cat.name,
+						}))}
+						placeholder="All Categories"
+						className="min-w-[120px]"
+					/>
+					<Select
+						value={tagFilter[0] || ""}
+						onValueChange={(val) => {
+							if (typeof val === "string") setTagFilter(val ? [val] : []);
+						}}
+						options={tags.map((tag) => ({ value: tag.id, label: tag.name }))}
+						placeholder="All Tags"
+						className="min-w-[120px]"
+					/>
 				</div>
 			</div>
 
@@ -309,6 +499,34 @@ const AdminPosts: React.FC<AdminPostsProps> = ({ isSuperAdmin }) => {
 											<span className={getStatusBadge(post.status)}>
 												{post.status}
 											</span>
+										</div>
+										<div className="flex flex-wrap gap-2 mb-2">
+											{post.categories && post.categories.length > 0 && (
+												<span className="text-xs text-gray-500">
+													Categories:
+												</span>
+											)}
+											{post.categories?.map((cat) => (
+												<span
+													key={cat.id}
+													className="inline-block bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium"
+												>
+													{cat.name}
+												</span>
+											))}
+											{post.tags && post.tags.length > 0 && (
+												<span className="ml-2 text-xs text-gray-500">
+													Tags:
+												</span>
+											)}
+											{post.tags?.map((tag) => (
+												<span
+													key={tag.id}
+													className="inline-block bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-medium"
+												>
+													{tag.name}
+												</span>
+											))}
 										</div>
 										<div className="flex items-center space-x-2 mb-2">
 											<span className={getRoleBadge(post.author?.role)}>

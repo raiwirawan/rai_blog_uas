@@ -3,11 +3,12 @@
 import { useEffect, useState } from "react";
 import { useSupabase } from "@/components/supabase-provider";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
-import { Post as PostType } from "@/types/supabase";
+import { Post as PostType, Category, Tag } from "@/types/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
-import { Plus, Edit, Trash2, CheckCircle, AlertCircle } from "lucide-react";
+import { Plus, Edit, Trash2, CheckCircle, AlertCircle, X } from "lucide-react";
+import Select from "react-select";
 
 // Tambahkan status ke tipe Post lokal jika belum ada
 type Post = PostType & { status?: string };
@@ -32,6 +33,11 @@ export default function MyPosts() {
 	const [saving, setSaving] = useState(false);
 	const [formError, setFormError] = useState<string | null>(null);
 
+	const [categories, setCategories] = useState<Category[]>([]);
+	const [tags, setTags] = useState<Tag[]>([]);
+	const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+	const [selectedTags, setSelectedTags] = useState<string[]>([]);
+
 	// Fetch posts milik user
 	useEffect(() => {
 		if (!user) return;
@@ -48,10 +54,25 @@ export default function MyPosts() {
 			});
 	}, [user, supabase]);
 
+	// Fetch categories & tags saat form dibuka
+	useEffect(() => {
+		if (!showForm) return;
+		supabase
+			.from("categories")
+			.select("*")
+			.then(({ data }) => setCategories(data || []));
+		supabase
+			.from("tags")
+			.select("*")
+			.then(({ data }) => setTags(data || []));
+	}, [showForm, supabase]);
+
 	// Handler CRUD (dummy, to be implemented)
 	const handleAdd = () => {
 		setEditPost(null);
 		setForm({ title: "", slug: "", content: "", status: "draft" });
+		setSelectedCategories([]);
+		setSelectedTags([]);
 		setFormError(null);
 		setShowForm(true);
 	};
@@ -63,6 +84,8 @@ export default function MyPosts() {
 			content: post.content ?? "",
 			status: post.status || "draft",
 		});
+		setSelectedCategories(post.categories?.map((c) => c.id) || []);
+		setSelectedTags(post.tags?.map((t) => t.id) || []);
 		setFormError(null);
 		setShowForm(true);
 	};
@@ -92,6 +115,7 @@ export default function MyPosts() {
 			return;
 		}
 		let result;
+		let postId = editPost?.id;
 		if (editPost) {
 			result = await supabase
 				.from("posts")
@@ -116,12 +140,30 @@ export default function MyPosts() {
 				})
 				.select()
 				.single();
+			postId = result.data?.id;
 		}
 		const { data, error } = result;
-		if (error) {
-			setFormError(error.message);
+		if (error || !postId) {
+			setFormError(error?.message || "Failed to save post.");
 			setSaving(false);
 			return;
+		}
+		// Simpan relasi kategori
+		await supabase.from("post_categories").delete().eq("post_id", postId);
+		if (selectedCategories.length > 0) {
+			await supabase.from("post_categories").insert(
+				selectedCategories.map((category_id) => ({
+					post_id: postId,
+					category_id,
+				}))
+			);
+		}
+		// Simpan relasi tag
+		await supabase.from("post_tags").delete().eq("post_id", postId);
+		if (selectedTags.length > 0) {
+			await supabase
+				.from("post_tags")
+				.insert(selectedTags.map((tag_id) => ({ post_id: postId, tag_id })));
 		}
 		if (editPost) {
 			setPosts((prev) => prev.map((p) => (p.id === data.id ? data : p)));
@@ -260,12 +302,30 @@ export default function MyPosts() {
 
 			{/* Modal Form */}
 			{showForm && (
-				<div className="fixed inset-0 bg-black bg-opacity-40 z-50 flex items-center justify-center p-4">
-					<Card className="w-full max-w-md">
+				<div
+					className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+					style={{ backdropFilter: "blur(2px)" }}
+					onClick={() => !saving && setShowForm(false)}
+					aria-modal="true"
+					role="dialog"
+				>
+					<div
+						className="relative w-full max-w-md min-h-[300px] h-auto max-h-[80vh] bg-white rounded-2xl shadow-2xl animate-fadeInScale flex flex-col"
+						onClick={(e) => e.stopPropagation()}
+					>
+						<button
+							type="button"
+							className="absolute top-3 right-3 text-gray-400 hover:text-gray-700 focus:outline-none"
+							onClick={() => !saving && setShowForm(false)}
+							aria-label="Close"
+							tabIndex={0}
+						>
+							<X className="h-6 w-6" />
+						</button>
 						<CardHeader>
 							<CardTitle>{editPost ? "Edit Post" : "New Post"}</CardTitle>
 						</CardHeader>
-						<CardContent>
+						<CardContent className="overflow-y-auto flex-1">
 							<form onSubmit={handleFormSubmit} className="space-y-4">
 								{formError && (
 									<div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-800 flex items-center gap-2">
@@ -339,6 +399,44 @@ export default function MyPosts() {
 									/>
 									<label htmlFor="published">Published</label>
 								</div>
+								<div>
+									<label className="block text-sm font-medium mb-1">
+										Categories
+									</label>
+									<Select
+										isMulti
+										options={categories.map((cat) => ({
+											value: cat.id,
+											label: cat.name,
+										}))}
+										value={categories
+											.filter((cat) => selectedCategories.includes(cat.id))
+											.map((cat) => ({ value: cat.id, label: cat.name }))}
+										onChange={(opts) =>
+											setSelectedCategories(opts.map((opt) => opt.value))
+										}
+										placeholder="Pilih kategori"
+										classNamePrefix="react-select"
+									/>
+								</div>
+								<div>
+									<label className="block text-sm font-medium mb-1">Tags</label>
+									<Select
+										isMulti
+										options={tags.map((tag) => ({
+											value: tag.id,
+											label: tag.name,
+										}))}
+										value={tags
+											.filter((tag) => selectedTags.includes(tag.id))
+											.map((tag) => ({ value: tag.id, label: tag.name }))}
+										onChange={(opts) =>
+											setSelectedTags(opts.map((opt) => opt.value))
+										}
+										placeholder="Pilih tag"
+										classNamePrefix="react-select"
+									/>
+								</div>
 								<div className="flex gap-2 pt-2">
 									<Button
 										type="button"
@@ -354,7 +452,22 @@ export default function MyPosts() {
 								</div>
 							</form>
 						</CardContent>
-					</Card>
+					</div>
+					<style jsx global>{`
+						@keyframes fadeInScale {
+							0% {
+								opacity: 0;
+								transform: scale(0.95);
+							}
+							100% {
+								opacity: 1;
+								transform: scale(1);
+							}
+						}
+						.animate-fadeInScale {
+							animation: fadeInScale 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+						}
+					`}</style>
 				</div>
 			)}
 		</div>
