@@ -42,7 +42,7 @@ export default function BlogPostPage({
 				if (!postData) throw new Error("Post not found");
 
 				// Check if post is published
-				if (!postData.is_published) {
+				if (!postData.status || postData.status !== "published") {
 					// Check if user is author or admin to view unpublished post
 					const {
 						data: { session },
@@ -217,7 +217,7 @@ export default function BlogPostPage({
 							})}
 						</time>
 
-						{!post.is_published && (
+						{post.status !== "published" && (
 							<span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
 								Draft
 							</span>
@@ -227,7 +227,7 @@ export default function BlogPostPage({
 
 				<div className="prose prose-lg max-w-none text-gray-900">
 					{/* Display the content with proper formatting */}
-					{post.content.split("\n").map((paragraph, index) => (
+					{(post.content ?? "").split("\n").map((paragraph, index) => (
 						<p key={index}>{paragraph}</p>
 					))}
 				</div>

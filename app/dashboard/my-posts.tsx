@@ -60,7 +60,7 @@ export default function MyPosts() {
 		setForm({
 			title: post.title,
 			slug: post.slug,
-			content: post.content,
+			content: post.content ?? "",
 			status: post.status || "draft",
 		});
 		setFormError(null);
@@ -216,9 +216,9 @@ export default function MyPosts() {
 											Slug: <span className="font-mono">{post.slug}</span>
 										</p>
 										<p className="text-gray-700 line-clamp-3 mb-2">
-											{post.content.length > 120
-												? `${post.content.substring(0, 120)}...`
-												: post.content}
+											{(post.content?.length ?? 0) > 120
+												? `${(post.content ?? "").substring(0, 120)}...`
+												: post.content ?? ""}
 										</p>
 										<div className="flex items-center gap-2 text-xs mb-2">
 											<span
@@ -314,7 +314,7 @@ export default function MyPosts() {
 									</label>
 									<textarea
 										name="content"
-										value={form.content}
+										value={form.content ?? ""}
 										onChange={handleFormChange}
 										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
 										rows={8}

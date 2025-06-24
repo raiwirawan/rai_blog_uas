@@ -134,9 +134,9 @@ export default function PostList() {
 						<div className="mt-4 text-gray-800">
 							{/* Display a preview of the content */}
 							<p>
-								{post.content.length > 200
-									? `${post.content.substring(0, 200)}...`
-									: post.content}
+								{(post.content?.length ?? 0) > 200
+									? `${(post.content ?? "").substring(0, 200)}...`
+									: post.content ?? ""}
 							</p>
 						</div>
 

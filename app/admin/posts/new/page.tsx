@@ -33,7 +33,7 @@ export default function NewPostPage() {
 				.insert({
 					title,
 					content,
-					user_id: user?.id,
+					author_id: user?.id,
 					status,
 				})
 				.select()
