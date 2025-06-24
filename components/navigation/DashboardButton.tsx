@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
+import { memo } from "react";
+import { ButtonSkeleton } from "@/components/ui/loading-skeleton";
 
-export default function DashboardButton() {
+const DashboardButton = memo(function DashboardButton() {
 	const { profile, loading, isAdmin } = useSupabaseAuth();
 
+	// Show optimized loading state
 	if (loading) {
-		return (
-			<div className="h-10 w-40 bg-gray-200 rounded animate-pulse mt-4 mb-6"></div>
-		);
+		return <ButtonSkeleton />;
 	}
 
 	if (!profile) {
@@ -23,8 +24,7 @@ export default function DashboardButton() {
 		);
 	}
 
-	let dashboardHref = "/dashboard";
-	if (isAdmin) dashboardHref = "/admin";
+	const dashboardHref = isAdmin ? "/admin" : "/dashboard";
 
 	return (
 		<Link
@@ -34,4 +34,6 @@ export default function DashboardButton() {
 			Go to Dashboard
 		</Link>
 	);
-}
+});
+
+export default DashboardButton;

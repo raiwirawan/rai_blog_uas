@@ -3,14 +3,22 @@
 import { useEffect, useState } from "react";
 import { useSupabase } from "@/components/supabase-provider";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
-import { Post } from "@/types/supabase";
+import { Post as PostType } from "@/types/supabase";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
+import { Plus, Edit, Trash2, CheckCircle, AlertCircle } from "lucide-react";
+
+// Tambahkan status ke tipe Post lokal jika belum ada
+type Post = PostType & { status?: string };
 
 export default function MyPosts() {
 	const { supabase } = useSupabase();
-	const { user, loading: userLoading } = useSupabaseAuth();
+	const { user, loading: userLoading, profile } = useSupabaseAuth();
 	const [posts, setPosts] = useState<Post[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const [success, setSuccess] = useState<string>("");
 
 	// Modal/form state (for add/edit)
 	const [showForm, setShowForm] = useState(false);
@@ -19,7 +27,7 @@ export default function MyPosts() {
 		title: "",
 		slug: "",
 		content: "",
-		is_published: false,
+		status: "draft",
 	});
 	const [saving, setSaving] = useState(false);
 	const [formError, setFormError] = useState<string | null>(null);
@@ -43,7 +51,8 @@ export default function MyPosts() {
 	// Handler CRUD (dummy, to be implemented)
 	const handleAdd = () => {
 		setEditPost(null);
-		setForm({ title: "", slug: "", content: "", is_published: false });
+		setForm({ title: "", slug: "", content: "", status: "draft" });
+		setFormError(null);
 		setShowForm(true);
 	};
 	const handleEdit = (post: Post) => {
@@ -52,27 +61,31 @@ export default function MyPosts() {
 			title: post.title,
 			slug: post.slug,
 			content: post.content,
-			is_published: post.is_published,
+			status: post.status || "draft",
 		});
+		setFormError(null);
 		setShowForm(true);
 	};
 
 	const handleFormChange = (
 		e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
 	) => {
-		const { name, value, type } = e.target;
-		const checked =
-			type === "checkbox" ? (e.target as HTMLInputElement).checked : undefined;
-		setForm((prev) => ({
-			...prev,
-			[name]: type === "checkbox" ? checked : value,
-		}));
+		const { name, value } = e.target;
+		if (name === "published") {
+			setForm((prev) => ({
+				...prev,
+				status: (e.target as HTMLInputElement).checked ? "published" : "draft",
+			}));
+		} else {
+			setForm((prev) => ({ ...prev, [name]: value }));
+		}
 	};
 
 	const handleFormSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		setSaving(true);
 		setFormError(null);
+		setSuccess("");
 		if (!form.title.trim() || !form.slug.trim() || !form.content.trim()) {
 			setFormError("Title, slug, and content are required.");
 			setSaving(false);
@@ -80,27 +93,25 @@ export default function MyPosts() {
 		}
 		let result;
 		if (editPost) {
-			// Update
 			result = await supabase
 				.from("posts")
 				.update({
 					title: form.title,
 					slug: form.slug,
 					content: form.content,
-					is_published: form.is_published,
+					status: form.status,
 				})
 				.eq("id", editPost.id)
 				.select()
 				.single();
 		} else {
-			// Insert
 			result = await supabase
 				.from("posts")
 				.insert({
 					title: form.title,
 					slug: form.slug,
 					content: form.content,
-					is_published: form.is_published,
+					status: form.status,
 					author_id: user!.id,
 				})
 				.select()
@@ -114,8 +125,10 @@ export default function MyPosts() {
 		}
 		if (editPost) {
 			setPosts((prev) => prev.map((p) => (p.id === data.id ? data : p)));
+			setSuccess("Post updated successfully!");
 		} else {
 			setPosts((prev) => [data, ...prev]);
+			setSuccess("Post created successfully!");
 		}
 		setShowForm(false);
 		setSaving(false);
@@ -124,9 +137,15 @@ export default function MyPosts() {
 	// Delete handler (with confirmation)
 	const handleDelete = async (postId: string) => {
 		if (!confirm("Delete this post?")) return;
+		setLoading(true);
 		const { error } = await supabase.from("posts").delete().eq("id", postId);
-		if (!error) setPosts(posts.filter((p) => p.id !== postId));
-		else alert(error.message);
+		if (!error) {
+			setPosts(posts.filter((p) => p.id !== postId));
+			setSuccess("Post deleted successfully!");
+		} else {
+			setError(error.message);
+		}
+		setLoading(false);
 	};
 
 	if (!user) {
@@ -136,172 +155,206 @@ export default function MyPosts() {
 	}
 
 	return (
-		<div className="bg-gray-50 min-h-screen py-8 px-2 sm:px-6 lg:px-8">
-			<h2 className="text-2xl font-extrabold text-gray-900 mb-6">
-				My Blog Posts
-			</h2>
-			<button
-				className="mb-6 px-4 py-2 bg-blue-700 text-white rounded shadow hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-				onClick={handleAdd}
-			>
-				+ New Post
-			</button>
-			{loading || userLoading ? (
-				<div className="text-gray-700">Loading...</div>
-			) : error ? (
-				<div className="text-red-700 bg-red-50 border border-red-200 p-4 rounded shadow">
-					{error}
-				</div>
-			) : posts.length === 0 ? (
-				<div className="bg-white text-gray-700 shadow p-6 rounded text-center border border-gray-200">
-					You have no posts yet.
-				</div>
-			) : (
-				<div className="overflow-x-auto">
-					<table className="min-w-full bg-white border border-gray-200 rounded shadow">
-						<thead className="bg-gray-100">
-							<tr>
-								<th className="px-4 py-2 border-b text-left text-gray-900">
-									Title
-								</th>
-								<th className="px-4 py-2 border-b text-left text-gray-900">
-									Slug
-								</th>
-								<th className="px-4 py-2 border-b text-left text-gray-900">
-									Published
-								</th>
-								<th className="px-4 py-2 border-b text-left text-gray-900">
-									Created
-								</th>
-								<th className="px-4 py-2 border-b text-left text-gray-900">
-									Actions
-								</th>
-							</tr>
-						</thead>
-						<tbody>
-							{posts.map((post) => (
-								<tr key={post.id} className="hover:bg-gray-50">
-									<td className="px-4 py-2 border-b text-gray-800 font-medium">
-										{post.title}
-									</td>
-									<td className="px-4 py-2 border-b text-blue-700 font-mono">
-										{post.slug}
-									</td>
-									<td className="px-4 py-2 border-b text-gray-800">
-										{post.is_published ? "Yes" : "No"}
-									</td>
-									<td className="px-4 py-2 border-b text-gray-700">
-										{new Date(post.created_at).toLocaleString()}
-									</td>
-									<td className="px-4 py-2 border-b">
-										<button
-											className="mr-2 px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-yellow-500"
-											onClick={() => handleEdit(post)}
-										>
-											Edit
-										</button>
-										<button
-											className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
-											onClick={() => handleDelete(post.id)}
-										>
-											Delete
-										</button>
-									</td>
-								</tr>
-							))}
-						</tbody>
-					</table>
-				</div>
-			)}
-			{/* Modal/Form for add/edit post */}
-			{showForm && (
-				<div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-					<div className="bg-white p-6 rounded shadow-lg min-w-[350px] max-w-md w-full border border-gray-200">
-						<h3 className="text-xl font-bold mb-4 text-gray-900">
-							{editPost ? "Edit Post" : "New Post"}
-						</h3>
-						<form onSubmit={handleFormSubmit} className="space-y-4">
-							<div>
-								<label className="block text-sm font-medium mb-1 text-gray-800">
-									Title
-								</label>
-								<input
-									type="text"
-									name="title"
-									className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-blue-500 text-gray-900 bg-gray-50"
-									value={form.title}
-									onChange={handleFormChange}
-									disabled={saving}
-									required
-								/>
-							</div>
-							<div>
-								<label className="block text-sm font-medium mb-1 text-gray-800">
-									Slug
-								</label>
-								<input
-									type="text"
-									name="slug"
-									className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-blue-500 text-gray-900 bg-gray-50 font-mono"
-									value={form.slug}
-									onChange={handleFormChange}
-									disabled={saving}
-									required
-								/>
-							</div>
-							<div>
-								<label className="block text-sm font-medium mb-1 text-gray-800">
-									Content
-								</label>
-								<textarea
-									name="content"
-									className="w-full border border-gray-300 rounded px-3 py-2 min-h-[100px] focus:outline-none focus:border-blue-500 text-gray-900 bg-gray-50"
-									value={form.content}
-									onChange={handleFormChange}
-									disabled={saving}
-									required
-								/>
-							</div>
-							<div className="flex items-center">
-								<input
-									type="checkbox"
-									name="is_published"
-									checked={form.is_published}
-									onChange={handleFormChange}
-									disabled={saving}
-									id="is_published"
-								/>
-								<label
-									htmlFor="is_published"
-									className="ml-2 text-sm text-gray-800"
-								>
-									Published
-								</label>
-							</div>
-							{formError && (
-								<div className="text-red-700 bg-red-50 border border-red-200 p-2 rounded text-sm">
-									{formError}
-								</div>
-							)}
-							<div className="flex justify-end mt-4">
-								<button
-									type="button"
-									className="px-4 py-2 bg-gray-200 text-gray-900 rounded mr-2 hover:bg-gray-300 focus:outline-none"
-									onClick={() => setShowForm(false)}
-									disabled={saving}
-								>
-									Cancel
-								</button>
-								<button
-									type="submit"
-									className="px-4 py-2 bg-blue-700 text-white rounded hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-									disabled={saving}
-								>
-									{saving ? "Saving..." : "Save"}
-								</button>
-							</div>
-						</form>
+		<div className="container mx-auto py-8 min-h-screen">
+			<Card className="mb-6">
+				<CardHeader>
+					<CardTitle className="text-3xl font-extrabold flex items-center gap-2">
+						<span role="img" aria-label="wave">
+							👋
+						</span>
+						Welcome,{" "}
+						<span className="bg-gradient-to-r from-blue-600 to-cyan-400 bg-clip-text text-transparent">
+							{profile?.display_name || profile?.username || user.email}
+						</span>
+						!
+					</CardTitle>
+					<div className="mt-2">
+						<p className="text-muted-foreground text-base">
+							Manage your blog posts easily from your dashboard.
+						</p>
 					</div>
+				</CardHeader>
+				<CardContent>
+					<Button onClick={handleAdd} className="mb-4">
+						<Plus className="h-4 w-4 mr-2" /> New Post
+					</Button>
+					{success && (
+						<div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-800 rounded flex items-center gap-2">
+							<CheckCircle className="h-4 w-4" /> {success}
+						</div>
+					)}
+					{error && (
+						<div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-800 rounded flex items-center gap-2">
+							<AlertCircle className="h-4 w-4" /> {error}
+						</div>
+					)}
+					{loading || userLoading ? (
+						<div className="space-y-4">
+							<LoadingSkeleton className="h-8 w-48" />
+							<div className="grid gap-4">
+								{Array.from({ length: 3 }).map((_, i) => (
+									<LoadingSkeleton key={i} className="h-20 w-full" />
+								))}
+							</div>
+						</div>
+					) : posts.length === 0 ? (
+						<div className="bg-white text-gray-700 shadow p-6 rounded text-center border border-gray-200">
+							You have no posts yet.
+						</div>
+					) : (
+						<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+							{posts.map((post) => (
+								<Card
+									key={post.id}
+									className="hover:shadow-md transition-shadow"
+								>
+									<CardContent className="p-4">
+										<h3 className="font-semibold text-lg text-blue-800 mb-1">
+											{post.title}
+										</h3>
+										<p className="text-sm text-gray-500 mb-2">
+											Slug: <span className="font-mono">{post.slug}</span>
+										</p>
+										<p className="text-gray-700 line-clamp-3 mb-2">
+											{post.content.length > 120
+												? `${post.content.substring(0, 120)}...`
+												: post.content}
+										</p>
+										<div className="flex items-center gap-2 text-xs mb-2">
+											<span
+												className={
+													post.status === "published"
+														? "bg-green-100 text-green-700 px-2 py-0.5 rounded-full"
+														: "bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full"
+												}
+											>
+												{post.status}
+											</span>
+											<span className="text-gray-400">
+												{new Date(post.created_at).toLocaleDateString()}
+											</span>
+										</div>
+										<div className="flex gap-2">
+											<Button
+												size="sm"
+												variant="outline"
+												onClick={() => handleEdit(post)}
+											>
+												<Edit className="h-4 w-4 mr-1" /> Edit
+											</Button>
+											<Button
+												size="sm"
+												variant="outline"
+												onClick={() => handleDelete(post.id)}
+											>
+												<Trash2 className="h-4 w-4" /> Delete
+											</Button>
+										</div>
+									</CardContent>
+								</Card>
+							))}
+						</div>
+					)}
+				</CardContent>
+			</Card>
+
+			{/* Modal Form */}
+			{showForm && (
+				<div className="fixed inset-0 bg-black bg-opacity-40 z-50 flex items-center justify-center p-4">
+					<Card className="w-full max-w-md">
+						<CardHeader>
+							<CardTitle>{editPost ? "Edit Post" : "New Post"}</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<form onSubmit={handleFormSubmit} className="space-y-4">
+								{formError && (
+									<div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-800 flex items-center gap-2">
+										<AlertCircle className="h-4 w-4" /> {formError}
+									</div>
+								)}
+								<div>
+									<label className="block text-sm font-medium mb-1">
+										Title
+									</label>
+									<input
+										type="text"
+										name="title"
+										value={form.title}
+										onChange={handleFormChange}
+										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+										required
+										maxLength={120}
+										placeholder="Post title"
+										disabled={saving}
+									/>
+									<div className="text-xs text-gray-400 text-right">
+										{form.title.length}/120
+									</div>
+								</div>
+								<div>
+									<label className="block text-sm font-medium mb-1">Slug</label>
+									<input
+										type="text"
+										name="slug"
+										value={form.slug}
+										onChange={handleFormChange}
+										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+										required
+										maxLength={120}
+										placeholder="post-title"
+										disabled={saving}
+									/>
+									<div className="text-xs text-gray-400 text-right">
+										{form.slug.length}/120
+									</div>
+								</div>
+								<div>
+									<label className="block text-sm font-medium mb-1">
+										Content
+									</label>
+									<textarea
+										name="content"
+										value={form.content}
+										onChange={handleFormChange}
+										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+										rows={8}
+										required
+										maxLength={5000}
+										placeholder="Write your post content here..."
+										disabled={saving}
+									/>
+									<div className="text-xs text-gray-400 text-right">
+										{form.content.length}/5000
+									</div>
+								</div>
+								<div className="flex items-center mb-2">
+									<input
+										type="checkbox"
+										name="published"
+										checked={form.status === "published"}
+										onChange={handleFormChange}
+										id="published"
+										className="mr-2"
+										disabled={saving}
+									/>
+									<label htmlFor="published">Published</label>
+								</div>
+								<div className="flex gap-2 pt-2">
+									<Button
+										type="button"
+										variant="outline"
+										onClick={() => setShowForm(false)}
+										disabled={saving}
+									>
+										Cancel
+									</Button>
+									<Button type="submit" disabled={saving}>
+										{saving ? "Saving..." : editPost ? "Update" : "Create"}
+									</Button>
+								</div>
+							</form>
+						</CardContent>
+					</Card>
 				</div>
 			)}
 		</div>

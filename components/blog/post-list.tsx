@@ -24,7 +24,7 @@ export default function PostList() {
             author:author_id(id, display_name, username)
           `
 					)
-					.eq("is_published", true)
+					.eq("status", "published")
 					.order("created_at", { ascending: false });
 
 				if (error) throw error;
