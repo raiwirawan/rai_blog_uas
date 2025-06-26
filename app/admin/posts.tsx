@@ -183,17 +183,21 @@ const AdminPosts: React.FC<AdminPostsProps> = ({ isSuperAdmin }) => {
 				if (statusFilter !== "all") {
 					query = query.eq("status", statusFilter);
 				}
+				if (postIdsByCategory && postIdsByCategory.length === 0) {
+					setPosts([]);
+					setLoading(false);
+					return;
+				}
+				if (postIdsByTag && postIdsByTag.length === 0) {
+					setPosts([]);
+					setLoading(false);
+					return;
+				}
 				if (postIdsByCategory) {
-					query = query.in(
-						"id",
-						postIdsByCategory.length > 0 ? postIdsByCategory : ["-"]
-					);
+					query = query.in("id", postIdsByCategory);
 				}
 				if (postIdsByTag) {
-					query = query.in(
-						"id",
-						postIdsByTag.length > 0 ? postIdsByTag : ["-"]
-					);
+					query = query.in("id", postIdsByTag);
 				}
 				const { data, error } = await query;
 				if (error) {
@@ -418,6 +422,29 @@ const AdminPosts: React.FC<AdminPostsProps> = ({ isSuperAdmin }) => {
 						placeholder="Status"
 						className="min-w-[110px]"
 					/>
+					{statusFilter !== "all" && (
+						<Button
+							variant="ghost"
+							size="icon"
+							onClick={() => setStatusFilter("all")}
+							title="Clear Status Filter"
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								className="h-4 w-4"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+							>
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth={2}
+									d="M6 18L18 6M6 6l12 12"
+								/>
+							</svg>
+						</Button>
+					)}
 					<Select
 						value={authorRoleFilter}
 						onValueChange={(val) => {
@@ -432,6 +459,29 @@ const AdminPosts: React.FC<AdminPostsProps> = ({ isSuperAdmin }) => {
 						placeholder="Role"
 						className="min-w-[110px]"
 					/>
+					{authorRoleFilter !== "all" && (
+						<Button
+							variant="ghost"
+							size="icon"
+							onClick={() => setAuthorRoleFilter("all")}
+							title="Clear Role Filter"
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								className="h-4 w-4"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+							>
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth={2}
+									d="M6 18L18 6M6 6l12 12"
+								/>
+							</svg>
+						</Button>
+					)}
 					<Select
 						value={categoryFilter[0] || ""}
 						onValueChange={(val) => {
@@ -444,6 +494,29 @@ const AdminPosts: React.FC<AdminPostsProps> = ({ isSuperAdmin }) => {
 						placeholder="All Categories"
 						className="min-w-[120px]"
 					/>
+					{categoryFilter.length > 0 && (
+						<Button
+							variant="ghost"
+							size="icon"
+							onClick={() => setCategoryFilter([])}
+							title="Clear Category Filter"
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								className="h-4 w-4"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+							>
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth={2}
+									d="M6 18L18 6M6 6l12 12"
+								/>
+							</svg>
+						</Button>
+					)}
 					<Select
 						value={tagFilter[0] || ""}
 						onValueChange={(val) => {
@@ -453,6 +526,29 @@ const AdminPosts: React.FC<AdminPostsProps> = ({ isSuperAdmin }) => {
 						placeholder="All Tags"
 						className="min-w-[120px]"
 					/>
+					{tagFilter.length > 0 && (
+						<Button
+							variant="ghost"
+							size="icon"
+							onClick={() => setTagFilter([])}
+							title="Clear Tag Filter"
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								className="h-4 w-4"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+							>
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth={2}
+									d="M6 18L18 6M6 6l12 12"
+								/>
+							</svg>
+						</Button>
+					)}
 				</div>
 			</div>
 

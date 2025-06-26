@@ -182,6 +182,7 @@ export default function AdminPage() {
 						onChange={(e) => setActiveTab(e.target.value)}
 						className="block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
 					>
+						<option value="">-- Clear Filter --</option>
 						{isSuperAdmin && <option value="users">User Management</option>}
 						<option value="posts">Blog Management</option>
 						<option value="categories">Categories</option>
@@ -190,7 +191,7 @@ export default function AdminPage() {
 				</div>
 
 				<div className="hidden sm:block">
-					<nav className="flex space-x-8">
+					<nav className="flex space-x-8 items-center">
 						{isSuperAdmin && (
 							<button
 								onClick={() => setActiveTab("users")}
@@ -273,6 +274,12 @@ export default function AdminPage() {
 
 				{activeTab === "categories" && <CategoryManagement />}
 				{activeTab === "tags" && <TagManagement />}
+
+				{activeTab === "" && (
+					<div className="text-center text-muted-foreground py-12">
+						<p className="text-lg font-medium">Tidak ada tab yang dipilih.</p>
+					</div>
+				)}
 			</div>
 		</div>
 	);

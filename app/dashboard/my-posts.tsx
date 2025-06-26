@@ -76,7 +76,7 @@ export default function MyPosts() {
 		setFormError(null);
 		setShowForm(true);
 	};
-	const handleEdit = (post: Post) => {
+	const handleEdit = async (post: Post) => {
 		setEditPost(post);
 		setForm({
 			title: post.title,
@@ -84,9 +84,23 @@ export default function MyPosts() {
 			content: post.content ?? "",
 			status: post.status || "draft",
 		});
-		setSelectedCategories(post.categories?.map((c) => c.id) || []);
-		setSelectedTags(post.tags?.map((t) => t.id) || []);
 		setFormError(null);
+		setSaving(true);
+		// Fetch relasi kategori dan tag dari Supabase
+		const [{ data: catData }, { data: tagData }] = await Promise.all([
+			supabase
+				.from("post_categories")
+				.select("category_id")
+				.eq("post_id", post.id),
+			supabase.from("post_tags").select("tag_id").eq("post_id", post.id),
+		]);
+		setSelectedCategories(
+			catData ? catData.map((d: { category_id: string }) => d.category_id) : []
+		);
+		setSelectedTags(
+			tagData ? tagData.map((d: { tag_id: string }) => d.tag_id) : []
+		);
+		setSaving(false);
 		setShowForm(true);
 	};
 
@@ -310,7 +324,7 @@ export default function MyPosts() {
 					role="dialog"
 				>
 					<div
-						className="relative w-full max-w-md min-h-[300px] h-auto max-h-[80vh] bg-white rounded-2xl shadow-2xl animate-fadeInScale flex flex-col"
+						className="relative w-full max-w-md min-h-[300px] h-auto max-h-[80vh] bg-white rounded-2xl shadow-2xl animate-fadeInScale flex flex-col pt-6 pb-6"
 						onClick={(e) => e.stopPropagation()}
 					>
 						<button

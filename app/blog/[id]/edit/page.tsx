@@ -117,7 +117,11 @@ export default function EditPostPage() {
 	};
 
 	const handleCancel = () => {
-		router.back();
+		if (postId) {
+			router.push(`/blog/${postId}`);
+		} else {
+			router.push("/admin");
+		}
 	};
 
 	if (loading)
