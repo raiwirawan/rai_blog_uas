@@ -11,7 +11,7 @@ export default function NewPostPage() {
 	const router = useRouter();
 	const [title, setTitle] = useState("");
 	const [content, setContent] = useState("");
-	const [isPublished, setIsPublished] = useState(false);
+	const [status, setStatus] = useState("draft");
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [error, setError] = useState("");
 
@@ -27,16 +27,14 @@ export default function NewPostPage() {
 		setError("");
 
 		try {
-			// Use the imported supabase client directly
-
 			// Insert post
 			const { error: postError } = await supabase
 				.from("posts")
 				.insert({
 					title,
 					content,
-					user_id: user?.id,
-					is_published: isPublished,
+					author_id: user?.id,
+					status,
 				})
 				.select()
 				.single();
@@ -146,8 +144,10 @@ export default function NewPostPage() {
 					<input
 						id="is-published"
 						type="checkbox"
-						checked={isPublished}
-						onChange={(e) => setIsPublished(e.target.checked)}
+						checked={status === "published"}
+						onChange={(e) =>
+							setStatus(e.target.checked ? "published" : "draft")
+						}
 						className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
 					/>
 					<label

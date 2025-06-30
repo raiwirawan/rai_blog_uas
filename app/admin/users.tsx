@@ -1,6 +1,22 @@
 import React, { useEffect, useState } from "react";
 import { useSupabase } from "@/components/supabase-provider";
 import { UserProfile } from "@/types/supabase";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
+import {
+	Users,
+	UserPlus,
+	Edit,
+	Trash2,
+	Shield,
+	User,
+	Mail,
+	UserCheck,
+	AlertCircle,
+	CheckCircle,
+	XCircle,
+} from "lucide-react";
 
 interface AdminUsersProps {
 	isSuperAdmin?: boolean;
@@ -188,199 +204,321 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ isSuperAdmin }) => {
 		}
 	};
 
-	return (
-		<div>
-			<h2 className="text-xl font-bold mb-4">User Management</h2>
-			<div className="bg-gray-100 p-4 rounded">
-				<div className="mb-2 text-sm text-gray-700">
-					{isSuperAdmin ? (
-						<>
-							<p>
-								<span className="font-semibold text-blue-800">Superadmin:</span>{" "}
-								Tambah/edit/hapus user & admin, promosi/demote user & admin.
-							</p>
-						</>
-					) : (
-						<>
-							<p>
-								<span className="font-semibold text-blue-800">Admin:</span>{" "}
-								Tambah/edit/hapus user saja.
-							</p>
-						</>
-					)}
-				</div>
-				<button
-					className="mb-4 px-4 py-2 bg-blue-700 text-white rounded hover:bg-blue-800"
-					onClick={openCreateModal}
-				>
-					Tambah User/Admin
-				</button>
-				<div className="bg-white p-4 rounded shadow border border-gray-200 overflow-x-auto">
-					{loading ? (
-						<div className="text-gray-500">Loading users...</div>
-					) : error ? (
-						<div className="text-red-600">{error}</div>
-					) : users.length === 0 ? (
-						<div className="text-gray-500">No users found.</div>
-					) : (
-						<table className="min-w-full divide-y divide-blue-300 bg-blue-50 rounded-lg">
-							<thead className="bg-blue-700">
-								<tr>
-									<th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider border-r border-blue-600">
-										Name
-									</th>
-									<th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider border-r border-blue-600">
-										Email
-									</th>
-									<th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider border-r border-blue-600">
-										Role
-									</th>
-									<th className="px-4 py-2"></th>
-								</tr>
-							</thead>
-							<tbody>
-								{users.map((user, idx) => (
-									<tr
-										key={user.id}
-										className={idx % 2 === 0 ? "bg-blue-100" : "bg-white"}
-									>
-										<td className="px-4 py-2 whitespace-nowrap font-semibold text-blue-900 border-r border-blue-200">
-											{user.display_name || user.username}
-										</td>
-										<td className="px-4 py-2 whitespace-nowrap text-blue-800 border-r border-blue-200">
-											{user.email}
-										</td>
-										<td className="px-4 py-2 whitespace-nowrap capitalize text-blue-700 border-r border-blue-200">
-											{user.role}
-										</td>
-										<td className="px-4 py-2 whitespace-nowrap text-right">
-											<button
-												className="text-blue-700 font-bold hover:underline mr-2"
-												onClick={() => handleEdit(user)}
-											>
-												Edit
-											</button>
-											<button
-												className="text-red-700 font-bold hover:underline mr-2"
-												onClick={() => handleDelete(user)}
-											>
-												Delete
-											</button>
-											{isSuperAdmin && user.role !== "superadmin" && (
-												<button
-													className="text-green-700 font-bold hover:underline"
-													onClick={() => handlePromoteDemote(user)}
-												>
-													{user.role === "admin"
-														? "Demote to User"
-														: "Promote to Admin"}
-												</button>
-											)}
-										</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
-					)}
+	const getRoleIcon = (role: string) => {
+		switch (role) {
+			case "superadmin":
+				return <Shield className="h-4 w-4 text-purple-600" />;
+			case "admin":
+				return <UserCheck className="h-4 w-4 text-blue-600" />;
+			default:
+				return <User className="h-4 w-4 text-gray-600" />;
+		}
+	};
+
+	const getRoleBadge = (role: string) => {
+		const baseClasses =
+			"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium";
+		switch (role) {
+			case "superadmin":
+				return `${baseClasses} bg-purple-100 text-purple-800`;
+			case "admin":
+				return `${baseClasses} bg-blue-100 text-blue-800`;
+			default:
+				return `${baseClasses} bg-gray-100 text-gray-800`;
+		}
+	};
+
+	if (loading) {
+		return (
+			<div className="space-y-4">
+				<LoadingSkeleton className="h-8 w-48" />
+				<div className="grid gap-4">
+					{Array.from({ length: 3 }).map((_, i) => (
+						<LoadingSkeleton key={i} className="h-20 w-full" />
+					))}
 				</div>
 			</div>
+		);
+	}
 
-			{/* Modal for Create/Edit User */}
-			{modalOpen && (
-				<div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-					<div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md relative">
-						<button
-							onClick={closeModal}
-							className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
-						>
-							&times;
-						</button>
-						<h3 className="text-lg font-bold mb-4">
-							{isEdit ? "Edit User/Admin" : "Tambah User/Admin"}
+	return (
+		<div className="space-y-6">
+			{/* Info Card */}
+			<Card className="bg-blue-50 border-blue-200">
+				<CardContent className="p-4">
+					<div className="flex items-start space-x-3">
+						<Shield className="h-5 w-5 text-blue-600 mt-0.5" />
+						<div>
+							<p className="text-sm font-medium text-blue-900">
+								{isSuperAdmin ? "Superadmin Access:" : "Admin Access:"}
+							</p>
+							<p className="text-sm text-blue-700">
+								{isSuperAdmin
+									? "Tambah/edit/hapus user & admin, promosi/demote user & admin."
+									: "Kelola user biasa (tidak bisa mengelola admin)."}
+							</p>
+						</div>
+					</div>
+				</CardContent>
+			</Card>
+
+			{/* Error Display */}
+			{error && (
+				<Card className="border-red-200 bg-red-50">
+					<CardContent className="p-4">
+						<div className="flex items-center space-x-2">
+							<AlertCircle className="h-5 w-5 text-red-600" />
+							<p className="text-red-800">{error}</p>
+						</div>
+					</CardContent>
+				</Card>
+			)}
+
+			{/* Action Bar */}
+			<div className="flex justify-between items-center">
+				<div className="flex items-center space-x-2">
+					<Users className="h-5 w-5 text-gray-600" />
+					<h3 className="text-lg font-semibold text-gray-900">
+						User List ({users.length} users)
+					</h3>
+				</div>
+				<Button
+					onClick={openCreateModal}
+					className="flex items-center space-x-2"
+				>
+					<UserPlus className="h-4 w-4" />
+					<span>Add User</span>
+				</Button>
+			</div>
+
+			{/* Users Grid */}
+			<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+				{users.map((user) => (
+					<Card key={user.id} className="hover:shadow-md transition-shadow">
+						<CardContent className="p-4">
+							<div className="flex items-start justify-between mb-3">
+								<div className="flex items-center space-x-3">
+									<div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
+										{getRoleIcon(user.role)}
+									</div>
+									<div>
+										<p className="font-medium text-gray-900">
+											{user.display_name || user.username}
+										</p>
+										<p className="text-sm text-gray-500">@{user.username}</p>
+									</div>
+								</div>
+								<span className={getRoleBadge(user.role)}>{user.role}</span>
+							</div>
+
+							<div className="space-y-2 mb-4">
+								<div className="flex items-center space-x-2 text-sm text-gray-600">
+									<Mail className="h-4 w-4" />
+									<span>{user.email}</span>
+								</div>
+								<div className="flex items-center space-x-2 text-sm text-gray-600">
+									<User className="h-4 w-4" />
+									<span>ID: {user.id.slice(0, 8)}...</span>
+								</div>
+							</div>
+
+							<div className="flex space-x-2">
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={() => handleEdit(user)}
+									className="flex-1"
+								>
+									<Edit className="h-4 w-4 mr-1" />
+									Edit
+								</Button>
+								{isSuperAdmin && user.role !== "superadmin" && (
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={() => handlePromoteDemote(user)}
+										className="flex-1"
+									>
+										{user.role === "admin" ? (
+											<>
+												<User className="h-4 w-4 mr-1" />
+												Demote
+											</>
+										) : (
+											<>
+												<UserCheck className="h-4 w-4 mr-1" />
+												Promote
+											</>
+										)}
+									</Button>
+								)}
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={() => handleDelete(user)}
+									className="text-red-600 hover:text-red-700 hover:bg-red-50"
+								>
+									<Trash2 className="h-4 w-4" />
+								</Button>
+							</div>
+						</CardContent>
+					</Card>
+				))}
+			</div>
+
+			{/* Empty State */}
+			{users.length === 0 && !loading && (
+				<Card>
+					<CardContent className="p-8 text-center">
+						<Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+						<h3 className="text-lg font-medium text-gray-900 mb-2">
+							No users found
 						</h3>
-						<form onSubmit={handleFormSubmit}>
-							<div className="mb-3">
-								<label className="block text-sm font-medium mb-1">Email</label>
-								<input
-									type="email"
-									name="email"
-									value={form.email || ""}
-									onChange={handleFormChange}
-									required
-									className="w-full border rounded px-3 py-2"
-									disabled={isEdit}
-								/>
-							</div>
-							<div className="mb-3">
-								<label className="block text-sm font-medium mb-1">
-									Username
-								</label>
-								<input
-									type="text"
-									name="username"
-									value={form.username || ""}
-									onChange={handleFormChange}
-									required
-									className="w-full border rounded px-3 py-2"
-								/>
-							</div>
-							<div className="mb-3">
-								<label className="block text-sm font-medium mb-1">
-									Display Name
-								</label>
-								<input
-									type="text"
-									name="display_name"
-									value={form.display_name || ""}
-									onChange={handleFormChange}
-									className="w-full border rounded px-3 py-2"
-								/>
-							</div>
-							{!isEdit && (
-								<div className="mb-3">
-									<label className="block text-sm font-medium mb-1">
-										Password
+						<p className="text-gray-500 mb-4">
+							{isSuperAdmin
+								? "No users have been created yet."
+								: "No regular users found."}
+						</p>
+						<Button onClick={openCreateModal}>
+							<UserPlus className="h-4 w-4 mr-2" />
+							Add First User
+						</Button>
+					</CardContent>
+				</Card>
+			)}
+
+			{/* Modal */}
+			{modalOpen && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+					<Card className="w-full max-w-md">
+						<CardHeader>
+							<CardTitle>{isEdit ? "Edit User" : "Add New User"}</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<form onSubmit={handleFormSubmit} className="space-y-4">
+								{formError && (
+									<div className="bg-red-50 border border-red-200 rounded-lg p-3">
+										<div className="flex items-center space-x-2">
+											<XCircle className="h-4 w-4 text-red-600" />
+											<p className="text-red-800 text-sm">{formError}</p>
+										</div>
+									</div>
+								)}
+
+								<div>
+									<label className="block text-sm font-medium text-gray-700 mb-1">
+										Username
 									</label>
 									<input
-										type="password"
-										name="password"
-										value={form.password || ""}
+										type="text"
+										name="username"
+										value={form.username || ""}
 										onChange={handleFormChange}
+										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
 										required
-										minLength={6}
-										className="w-full border rounded px-3 py-2"
 									/>
 								</div>
-							)}
-							{isSuperAdmin && (
-								<div className="mb-3">
-									<label className="block text-sm font-medium mb-1">Role</label>
-									<select
-										name="role"
-										value={form.role || "user"}
+
+								<div>
+									<label className="block text-sm font-medium text-gray-700 mb-1">
+										Email
+									</label>
+									<input
+										type="email"
+										name="email"
+										value={form.email || ""}
 										onChange={handleFormChange}
-										className="w-full border rounded px-3 py-2"
-									>
-										<option value="user">User</option>
-										<option value="admin">Admin</option>
-										<option value="superadmin" disabled>
-											Superadmin
-										</option>
-									</select>
+										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+										required
+									/>
 								</div>
-							)}
-							{formError && (
-								<div className="mb-2 text-red-600 text-sm">{formError}</div>
-							)}
-							<button
-								type="submit"
-								disabled={formLoading}
-								className="w-full px-4 py-2 bg-blue-700 text-white rounded hover:bg-blue-800 mt-2 disabled:opacity-50"
-							>
-								{formLoading ? "Loading..." : isEdit ? "Update" : "Create"}
-							</button>
-						</form>
-					</div>
+
+								<div>
+									<label className="block text-sm font-medium text-gray-700 mb-1">
+										Display Name
+									</label>
+									<input
+										type="text"
+										name="display_name"
+										value={form.display_name || ""}
+										onChange={handleFormChange}
+										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+									/>
+								</div>
+
+								{!isEdit && (
+									<div>
+										<label className="block text-sm font-medium text-gray-700 mb-1">
+											Password
+										</label>
+										<input
+											type="password"
+											name="password"
+											value={form.password || ""}
+											onChange={handleFormChange}
+											className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+											required
+										/>
+									</div>
+								)}
+
+								{isSuperAdmin && (
+									<div>
+										<label className="block text-sm font-medium text-gray-700 mb-1">
+											Role
+										</label>
+										<select
+											name="role"
+											value={form.role || "user"}
+											onChange={handleFormChange}
+											className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+										>
+											<option value="user">User</option>
+											<option value="admin">Admin</option>
+										</select>
+									</div>
+								)}
+
+								<div className="flex space-x-3 pt-4">
+									<Button
+										type="button"
+										variant="outline"
+										onClick={closeModal}
+										className="flex-1"
+										disabled={formLoading}
+									>
+										Cancel
+									</Button>
+									<Button
+										type="submit"
+										className="flex-1"
+										disabled={formLoading}
+									>
+										{formLoading ? (
+											<>
+												<div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+												{isEdit ? "Updating..." : "Creating..."}
+											</>
+										) : (
+											<>
+												{isEdit ? (
+													<>
+														<CheckCircle className="h-4 w-4 mr-2" />
+														Update
+													</>
+												) : (
+													<>
+														<UserPlus className="h-4 w-4 mr-2" />
+														Create
+													</>
+												)}
+											</>
+										)}
+									</Button>
+								</div>
+							</form>
+						</CardContent>
+					</Card>
 				</div>
 			)}
 		</div>
